@@ -79,7 +79,21 @@ async function upsertUser(
   p: { provider: string; providerId: string; login: string | null; name: string; email: string | null; avatar: string | null },
 ): Promise<string> {
   // checked before anything is written, so uninvited visitors leave no trace in the DB
-  if (!isAllowed(env, p)) throw new HttpError(403, NOT_INVITED);
+  if (!isAllowed(env, p)) {
+    // shows up in Cloudflare dashboard → Workers → inkboard → Logs (search "login_rejected")
+    console.warn(
+      JSON.stringify({
+        event: "login_rejected",
+        provider: p.provider,
+        login: p.login,
+        name: p.name,
+        email: p.email,
+        // ready to paste into ALLOWED_USERS if you want to let them in
+        invite: p.login ? `${p.provider}:${p.login}` : p.email,
+      }),
+    );
+    throw new HttpError(403, NOT_INVITED);
+  }
   const row = await env.DB.prepare(
     `INSERT INTO users (id, provider, provider_id, login, name, email, avatar_url, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)

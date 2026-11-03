@@ -90,6 +90,8 @@ npx wrangler secret put ALLOWED_USERS
 
 - 항목은 **이메일**(GitHub/Google에서 인증된 이메일만 인정) 또는 **`provider:아이디`**(`github:jihoo12`, 로컬은 `dev:alice`). 대소문자 무관, 쉼표·공백·줄바꿈으로 구분.
 - 목록에서 빼면 그 사람의 기존 로그인도 바로 끊겨요. 초대받지 않은 사람은 DB에 아무것도 남지 않습니다.
+- 초대받지 않은 사람이 로그인을 시도하면 Cloudflare 대시보드 → Workers & Pages → inkboard → **Logs**에 `login_rejected` 로그가 남아요.
+  `invite` 값(예: `github:someone`)을 그대로 `ALLOWED_USERS`에 추가하면 초대할 수 있어요. 터미널에서는 `npx wrangler tail --search login_rejected`로 실시간으로 볼 수 있어요.
 - 로그인 없이도 "링크로 보기"로 공유한 보드는 누구나 볼 수 있으니, 보여주고 싶은 보드는 보기 링크로 공유하면 돼요.
 - 이 기능을 쓰려면 `0002_user_login.sql` 마이그레이션이 필요해요 (`npm run db:migrate:remote`).
 
