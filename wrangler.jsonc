@@ -1,24 +1,41 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "inkboard",
-  "main": "worker/index.ts",
-  "compatibility_date": "2026-10-01",
-  "assets": {
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/auth/*"]
-  },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "inkboard-db",
-      // `npx wrangler d1 create inkboard-db` 로 만든 뒤 나온 id로 바꾸세요 (로컬 개발은 그대로 둬도 됩니다)
-      "database_id": "00000000-0000-0000-0000-000000000000",
-      "migrations_dir": "migrations"
-    }
-  ],
-  "durable_objects": {
-    "bindings": [{ "name": "ROOM", "class_name": "BoardRoom" }]
-  },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BoardRoom"] }],
-  "observability": { "enabled": true }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "inkboard",
+	"main": "worker/index.ts",
+	"compatibility_date": "2026-10-01",
+	"assets": {
+		"not_found_handling": "single-page-application",
+		"run_worker_first": [
+			"/api/*",
+			"/auth/*"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "inkboard-db",
+			// `npx wrangler d1 create inkboard-db` 로 만든 DB의 id (로컬 개발은 .wrangler/state 의 로컬 DB를 씁니다)
+			"database_id": "e2e7ab62-8957-48e8-9047-ea37ddd8f2f3",
+			"migrations_dir": "migrations"
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "ROOM",
+				"class_name": "BoardRoom"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"BoardRoom"
+			]
+		}
+	],
+	"observability": {
+		"enabled": true
+	}
 }
