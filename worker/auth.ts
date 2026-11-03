@@ -9,8 +9,33 @@ export function providers(env: Env) {
     github: !!(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET),
     google: !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
     dev: env.DEV_LOGIN === "true",
+    inviteOnly: allowList(env) !== null,
   };
 }
+
+// ---- invite list ----
+
+/** Parsed ALLOWED_USERS, or null when unset (= anyone may log in). */
+function allowList(env: Env): Set<string> | null {
+  const raw = (env.ALLOWED_USERS || "").trim();
+  if (!raw) return null;
+  return new Set(raw.split(/[\s,;]+/).map((x) => x.trim().toLowerCase()).filter(Boolean));
+}
+
+/**
+ * Entries in ALLOWED_USERS are either an email address (matched against the
+ * provider's verified email) or `<provider>:<login>` such as `github:jihoo12`
+ * or `dev:alice`.
+ */
+function isAllowed(env: Env, u: { provider: string; login: string | null; email: string | null }): boolean {
+  const list = allowList(env);
+  if (!list) return true;
+  if (u.email && list.has(u.email.toLowerCase())) return true;
+  if (u.login && list.has(`${u.provider}:${u.login}`.toLowerCase())) return true;
+  return false;
+}
+
+const NOT_INVITED = "지금은 초대된 사람만 로그인할 수 있어요. 공유받은 보드 링크는 로그인 없이도 볼 수 있어요.";
 
 interface UserRow {
   id: string;
@@ -18,6 +43,7 @@ interface UserRow {
   email: string | null;
   avatar_url: string | null;
   provider: string;
+  login: string | null;
 }
 
 export async function getUser(req: Request, env: Env): Promise<User | null> {
@@ -25,13 +51,15 @@ export async function getUser(req: Request, env: Env): Promise<User | null> {
   if (!token) return null;
   const sid = await sha256(token);
   const row = await env.DB.prepare(
-    `SELECT u.id, u.name, u.email, u.avatar_url, u.provider
+    `SELECT u.id, u.name, u.email, u.avatar_url, u.provider, u.login
        FROM sessions s JOIN users u ON u.id = s.user_id
       WHERE s.id = ? AND s.expires_at > ?`,
   )
     .bind(sid, Date.now())
     .first<UserRow>();
   if (!row) return null;
+  // removing someone from ALLOWED_USERS also ends their existing sessions
+  if (!isAllowed(env, row)) return null;
   return { id: row.id, name: row.name, email: row.email, avatar: row.avatar_url, provider: row.provider };
 }
 
@@ -48,16 +76,32 @@ function safeReturn(path: string | null | undefined): string {
 
 async function upsertUser(
   env: Env,
-  p: { provider: string; providerId: string; name: string; email: string | null; avatar: string | null },
+  p: { provider: string; providerId: string; login: string | null; name: string; email: string | null; avatar: string | null },
 ): Promise<string> {
+  // checked before anything is written, so uninvited visitors leave no trace in the DB
+  if (!isAllowed(env, p)) {
+    // shows up in Cloudflare dashboard → Workers → inkboard → Logs (search "login_rejected")
+    console.warn(
+      JSON.stringify({
+        event: "login_rejected",
+        provider: p.provider,
+        login: p.login,
+        name: p.name,
+        email: p.email,
+        // ready to paste into ALLOWED_USERS if you want to let them in
+        invite: p.login ? `${p.provider}:${p.login}` : p.email,
+      }),
+    );
+    throw new HttpError(403, NOT_INVITED);
+  }
   const row = await env.DB.prepare(
-    `INSERT INTO users (id, provider, provider_id, name, email, avatar_url, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO users (id, provider, provider_id, login, name, email, avatar_url, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (provider, provider_id) DO UPDATE SET
-       name = excluded.name, email = excluded.email, avatar_url = excluded.avatar_url
+       login = excluded.login, name = excluded.name, email = excluded.email, avatar_url = excluded.avatar_url
      RETURNING id`,
   )
-    .bind(randomId(), p.provider, p.providerId, p.name, p.email, p.avatar, Date.now())
+    .bind(randomId(), p.provider, p.providerId, p.login, p.name, p.email, p.avatar, Date.now())
     .first<{ id: string }>();
   if (!row) throw new HttpError(500, "Could not create user");
   return row.id;
@@ -132,15 +176,13 @@ export async function handleAuth(req: Request, env: Env, url: URL): Promise<Resp
       id: number; login: string; name: string | null; email: string | null; avatar_url: string;
     };
     if (!u?.id) throw new HttpError(400, "Could not read GitHub profile");
-    let email = u.email;
-    if (!email) {
-      const emails = (await (await fetch("https://api.github.com/user/emails", { headers: gh })).json().catch(() => [])) as {
-        email: string; primary: boolean; verified: boolean;
-      }[];
-      email = Array.isArray(emails) ? emails.find((e) => e.primary && e.verified)?.email ?? null : null;
-    }
+    // use the verified primary email (the public profile email isn't guaranteed to be verified)
+    const emails = (await (await fetch("https://api.github.com/user/emails", { headers: gh })).json().catch(() => [])) as {
+      email: string; primary: boolean; verified: boolean;
+    }[];
+    const email = Array.isArray(emails) ? emails.find((e) => e.primary && e.verified)?.email ?? null : null;
     const id = await upsertUser(env, {
-      provider: "github", providerId: String(u.id), name: u.name || u.login, email, avatar: u.avatar_url,
+      provider: "github", providerId: String(u.id), login: u.login, name: u.name || u.login, email, avatar: u.avatar_url,
     });
     return startSession(env, url, id, returnTo);
   }
@@ -176,11 +218,11 @@ export async function handleAuth(req: Request, env: Env, url: URL): Promise<Resp
       await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
         headers: { authorization: `Bearer ${tok.access_token}` },
       })
-    ).json()) as { sub: string; name?: string; email?: string; picture?: string };
+    ).json()) as { sub: string; name?: string; email?: string; email_verified?: boolean; picture?: string };
     if (!u?.sub) throw new HttpError(400, "Could not read Google profile");
     const id = await upsertUser(env, {
-      provider: "google", providerId: u.sub, name: u.name || u.email || "Google user",
-      email: u.email ?? null, avatar: u.picture ?? null,
+      provider: "google", providerId: u.sub, login: null, name: u.name || u.email || "Google user",
+      email: u.email && u.email_verified ? u.email : null, avatar: u.picture ?? null,
     });
     return startSession(env, url, id, returnTo);
   }
@@ -190,7 +232,7 @@ export async function handleAuth(req: Request, env: Env, url: URL): Promise<Resp
     if (!p.dev) throw new HttpError(404, "Dev login is disabled");
     const name = (url.searchParams.get("name") || "").trim().slice(0, 40) || "Guest";
     const id = await upsertUser(env, {
-      provider: "dev", providerId: name.toLowerCase(), name, email: null, avatar: null,
+      provider: "dev", providerId: name.toLowerCase(), login: name.toLowerCase(), name, email: null, avatar: null,
     });
     return startSession(env, url, id, url.searchParams.get("return") || "/");
   }

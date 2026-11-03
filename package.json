@@ -23,6 +23,7 @@
   },
   "homepage": "https://github.com/jihoo12/board#readme",
   "dependencies": {
+    "mathjax": "^3.2.2",
     "perfect-freehand": "^1.2.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

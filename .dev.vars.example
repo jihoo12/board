@@ -9,3 +9,7 @@ GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 # true 이면 OAuth 없이 이름만으로 로그인하는 "개발용 로그인"이 켜집니다. 프로덕션에서는 절대 켜지 마세요.
 DEV_LOGIN=true
+# 초대 목록. 여기 적힌 사람만 로그인할 수 있어요 (비워 두면 누구나 로그인 가능).
+# 이메일(인증된 이메일만 인정) 또는 provider:아이디. 쉼표/공백/줄바꿈으로 구분.
+#   예) ALLOWED_USERS="me@gmail.com, github:jihoo12, dev:alice"
+ALLOWED_USERS=
