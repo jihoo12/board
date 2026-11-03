@@ -9,6 +9,8 @@ export interface Env {
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   DEV_LOGIN?: string;
+  /** 초대 목록. 비어 있으면 누구나 로그인 가능. 예: "me@gmail.com, github:jihoo12" */
+  ALLOWED_USERS?: string;
 }
 
 export class HttpError extends Error {

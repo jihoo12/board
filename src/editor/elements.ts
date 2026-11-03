@@ -1,5 +1,6 @@
 import type { El, ElType, FontFamily } from "../../shared/types";
 import { hasLabel } from "./geometry";
+import { mathLayout } from "./math";
 
 export const FONT_STACKS: Record<FontFamily, string> = {
   hand: '"Patrick Hand", "Gaegu", "Comic Sans MS", cursive',
@@ -88,6 +89,14 @@ export function labelLines(el: El): string[] {
 export function fitText(el: El): El {
   const size = el.fontSize ?? 20;
   const fam = el.fontFamily ?? "hand";
+  if (el.type === "text" && el.math) {
+    const src = (el.text ?? "").trim();
+    if (!src) return { ...el, w: size * 2, h: size * LINE_HEIGHT };
+    const l = mathLayout(src);
+    // MathJax not loaded yet: keep the current box (drawing scales into it)
+    if (!l) return el.w && el.h ? el : { ...el, w: Math.max(size, src.length * size * 0.5), h: size * LINE_HEIGHT };
+    return { ...el, w: Math.max(l.w * size, 2), h: Math.max(l.h * size, size * 0.5) };
+  }
   if (el.type === "text") {
     const m = measureLines((el.text ?? "").split("\n"), size, fam);
     return { ...el, w: Math.max(m.w, 2), h: Math.max(m.h, size * LINE_HEIGHT) };

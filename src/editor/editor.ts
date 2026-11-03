@@ -9,12 +9,13 @@ import {
   absPoints, borderPoint, boxContains, boxesIntersect, center, elBox, handlePos, HANDLE_CURSORS,
   HANDLES, hasLabel, hitTest, isBindable, isLinear, normBox, simplify, unionBox, type Box, type Handle, type Pt,
 } from "./geometry";
+import { loadMath, mathImageReady, setMathRepaint } from "./math";
 import { drawElement, drawGrid, forgetCache } from "./render";
 import { Sync, type ConnStatus } from "./sync";
 
 export type Tool =
   | "select" | "hand" | "rectangle" | "diamond" | "ellipse" | "arrow" | "line" | "freedraw" | "text"
-  | "sticky" | "image" | "frame" | "eraser" | "laser";
+  | "sticky" | "image" | "frame" | "eraser" | "laser" | "math";
 
 export interface PeerView extends Peer {
   x: number;
@@ -76,6 +77,7 @@ const TOOL_KEYS: Record<string, Tool> = {
   v: "select", "1": "select", h: "hand", r: "rectangle", "2": "rectangle", d: "diamond", "3": "diamond",
   o: "ellipse", "4": "ellipse", a: "arrow", "5": "arrow", l: "line", "6": "line", p: "freedraw", "7": "freedraw",
   t: "text", "8": "text", s: "sticky", "9": "sticky", f: "frame", e: "eraser", k: "laser", i: "image",
+  m: "math",
 };
 
 export class Editor {
@@ -198,6 +200,10 @@ export class Editor {
     this.canvas.className = "board-canvas";
     host.appendChild(this.canvas);
     this.ctx = this.canvas.getContext("2d")!;
+    setMathRepaint(() => {
+      this.requestRender();
+      if (this.state.editingId) this.positionTextarea();
+    });
     this.rc = rough.canvas(this.canvas);
     this.textarea = document.createElement("textarea");
     this.textarea.className = "text-editor";
@@ -245,6 +251,7 @@ export class Editor {
     this.sync?.close();
     clearTimeout(this.connectTimer);
     this.ro?.disconnect();
+    setMathRepaint(null);
     cancelAnimationFrame(this.raf);
     this.raf = 0;
     window.removeEventListener("pointermove", this.onPointerMove);
@@ -867,6 +874,21 @@ export class Editor {
       return;
     }
 
+    if (tool === "math") {
+      const hit = this.hitAt(p, (el) => !!el.math);
+      if (hit) {
+        this.startEditing(hit.id);
+        return;
+      }
+      const el = makeElement("text", {
+        x: sp[0], y: sp[1] - (style.fontSize * LINE_HEIGHT) / 2, z: ++this.maxZ, math: true, textAlign: "left",
+      }, style);
+      this.commit([fitText(el)]);
+      this.startEditing(el.id, true);
+      if (!this.state.toolLock) this.setState({ tool: "select" });
+      return;
+    }
+
     if (tool === "freedraw") {
       const el = makeElement("freedraw", { x: p[0], y: p[1], points: [[0, 0]], z: ++this.maxZ }, style);
       this.commit([el]);
@@ -1347,7 +1369,7 @@ export class Editor {
     if (this.drag?.kind === "pan") c = "grabbing";
     else if (this.spaceDown || t === "hand") c = "grab";
     else if (t === "select") c = "default";
-    else if (t === "text") c = "text";
+    else if (t === "text" || t === "math") c = "text";
     else if (t === "eraser") c = "cell";
     this.canvas.style.cursor = c;
   }
@@ -1558,6 +1580,23 @@ export class Editor {
       /* plain text */
     }
     const style = this.state.style;
+    // "$...$" or "$$...$$" pastes become a formula
+    const tex = text.trim().match(/^\$\$([\s\S]+)\$\$$|^\$([^$]+)\$$/);
+    if (tex) {
+      const el = makeElement("text", {
+        x: this.lastScene[0], y: this.lastScene[1], text: (tex[1] ?? tex[2]).trim().slice(0, 5000), z: ++this.maxZ,
+        math: true, textAlign: "left",
+      }, style);
+      this.change([fitText(el)]);
+      this.select([el.id]);
+      loadMath()
+        .then(() => {
+          const cur = this.els.get(el.id);
+          if (cur && !cur.isDeleted) this.change([fitText(cur)]);
+        })
+        .catch(() => {});
+      return;
+    }
     const el = fitText(
       makeElement("text", { x: this.lastScene[0], y: this.lastScene[1], text: text.slice(0, 20000), z: ++this.maxZ }, style),
     );
@@ -1753,6 +1792,18 @@ export class Editor {
     this.setState({ editingId: id });
     const ta = this.textarea;
     ta.value = el.text ?? "";
+    ta.classList.toggle("math-editor", !!el.math);
+    ta.placeholder = el.math ? "LaTeX 수식 (예: e^{i\\pi} + 1 = 0) — Esc 또는 Ctrl+Enter로 완료" : "";
+    if (el.math) {
+      loadMath()
+        .then(() => {
+          // re-measure now that the real layout is known
+          const cur = this.els.get(id);
+          if (cur && !cur.isDeleted) this.commit([fitText(cur)]);
+          this.positionTextarea();
+        })
+        .catch((err: Error) => this.toast(err.message));
+    }
     ta.style.display = "block";
     this.positionTextarea();
     requestAnimationFrame(() => {
@@ -1774,7 +1825,19 @@ export class Editor {
     s.lineHeight = String(LINE_HEIGHT);
     s.color = el.strokeColor;
     s.textAlign = el.textAlign ?? "left";
-    if (el.type === "text") {
+    if (el.math) {
+      // source editor below the live-rendered formula, at a fixed readable size
+      const [x, y] = this.toScreen(el.x, el.y + el.h);
+      const lines = Math.min(8, Math.max(1, ta.value.split("\n").length));
+      s.font = fontString(15, "mono");
+      s.color = "#1e1e1e";
+      s.textAlign = "left";
+      s.left = `${x}px`;
+      s.top = `${y + 8}px`;
+      s.width = `${Math.max(280, el.w * z)}px`;
+      s.height = `${lines * 15 * LINE_HEIGHT + 18}px`;
+      s.whiteSpace = "pre-wrap";
+    } else if (el.type === "text") {
       const [x, y] = this.toScreen(el.x, el.y);
       s.left = `${x}px`;
       s.top = `${y}px`;
@@ -2064,7 +2127,10 @@ export class Editor {
     const w = b.w + pad * 2, h = b.h + pad * 2;
     if (opts.maxW && opts.maxH) scale = Math.min(opts.maxW / w, opts.maxH / h, 2);
     scale = Math.min(scale, 8192 / w, 8192 / h);
-    // make sure images are loaded
+    // make sure images and formulas are loaded
+    await Promise.all(
+      els.filter((e) => e.math && e.text?.trim()).map((e) => mathImageReady(e.text!.trim(), e.strokeColor)),
+    );
     await Promise.all(
       els.filter((e) => e.assetId).map((e) => {
         const img = this.getImage(e.assetId!);

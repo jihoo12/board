@@ -31,6 +31,7 @@ export function LoginButtons({ session, returnTo }: { session: Session; returnTo
           <button className="btn btn-lg" type="submit">입장</button>
         </form>
       )}
+      {p.inviteOnly && !none && <p className="muted small invite-note">🔒 지금은 초대된 사람만 로그인할 수 있어요.</p>}
       {none && (
         <p className="muted small">
           로그인 방법이 설정되지 않았어요. <code>GITHUB_CLIENT_ID</code> / <code>GOOGLE_CLIENT_ID</code> 비밀값을 설정하거나,
@@ -48,6 +49,7 @@ const FEATURES = [
   { icon: "👥", title: "실시간 협업", text: "같이 보는 사람의 커서와 레이저 포인터까지" },
   { icon: "☁️", title: "자동 저장", text: "Cloudflare에 바로바로 저장돼요" },
   { icon: "🔗", title: "링크 공유", text: "보기 전용 또는 편집 가능 링크로 공유" },
+  { icon: "∑", title: "LaTeX 수식", text: "보드 위에 수식을 바로 써넣기" },
 ];
 
 export function Landing({ session }: { session: Session }) {

@@ -12,6 +12,7 @@ const TOOLS: { tool: Tool; icon: IconName; label: string; key: string; viewer?: 
   { tool: "freedraw", icon: "freedraw", label: "펜 (P)", key: "7" },
   { tool: "text", icon: "text", label: "텍스트 (T)", key: "8" },
   { tool: "sticky", icon: "sticky", label: "스티키 노트 (S)", key: "9" },
+  { tool: "math", icon: "math", label: "수식 (M) — LaTeX, $...$ 붙여넣기도 돼요", key: "" },
   { tool: "image", icon: "image", label: "이미지 (I)", key: "" },
   { tool: "frame", icon: "frame", label: "프레임 (F)", key: "" },
   { tool: "eraser", icon: "eraser", label: "지우개 (E)", key: "" },

@@ -188,6 +188,12 @@ kbd {
   z-index: 3; white-space: pre; overflow-wrap: break-word; word-break: break-word; user-select: text; -webkit-user-select: text;
   min-width: 4px;
 }
+.text-editor.math-editor {
+  padding: 8px 10px; background: #fff; border: 1px solid #d0d4da; border-radius: 8px; overflow: auto;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); white-space: pre-wrap;
+}
+.text-editor.math-editor::placeholder { color: #adb5bd; }
+.invite-note { text-align: center; margin: 4px 0 0; }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
 .panel-btn { background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); width: 40px; height: 40px; border-radius: 10px; }
 

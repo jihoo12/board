@@ -44,7 +44,7 @@ function Swatches({ colors, current, onPick, allowNone }: { colors: string[]; cu
 
 const TOOL_TYPE: Partial<Record<EditorState["tool"], ElType>> = {
   rectangle: "rectangle", diamond: "diamond", ellipse: "ellipse", arrow: "arrow", line: "line",
-  freedraw: "freedraw", text: "text", sticky: "sticky", frame: "frame",
+  freedraw: "freedraw", text: "text", sticky: "sticky", frame: "frame", math: "text",
 };
 
 export function StylePanel({ editor, state }: { editor: Editor; state: EditorState }) {
@@ -62,6 +62,7 @@ export function StylePanel({ editor, state }: { editor: Editor; state: EditorSta
   const has = (...t: ElType[]) => t.some((x) => types.has(x));
   const shapes = has("rectangle", "ellipse", "diamond");
   const stroked = has("rectangle", "ellipse", "diamond", "arrow", "line", "freedraw", "text");
+  const onlyMath = sel.length ? sel.every((e) => e.math) : state.tool === "math";
   const hasText = has("text", "sticky") || (shapes && sel.some((e) => e.text)) || (shapes && !sel.length);
   const fillStyle = shapes ? (first && first.type !== "sticky" ? first.fillStyle : st.fillStyle) : "none";
   const fillColor = first && shapes ? first.fillColor : st.fillColor;
@@ -170,23 +171,23 @@ export function StylePanel({ editor, state }: { editor: Editor; state: EditorSta
       )}
       {hasText && (
         <>
-          <Row label="글꼴">
+          {!onlyMath && <Row label="글꼴">
             <Opt title="손글씨" value="hand" current={v("fontFamily")} onPick={(x) => set({ fontFamily: x })}><span style={{ fontFamily: "Patrick Hand, Gaegu" }}>가a</span></Opt>
             <Opt title="기본" value="sans" current={v("fontFamily")} onPick={(x) => set({ fontFamily: x })}><span style={{ fontFamily: "Inter, Noto Sans KR" }}>가a</span></Opt>
             <Opt title="코드" value="mono" current={v("fontFamily")} onPick={(x) => set({ fontFamily: x })}><span style={{ fontFamily: "JetBrains Mono" }}>{"</>"}</span></Opt>
-          </Row>
+          </Row>}
           <Row label="글자 크기">
             {[[16, "S"], [24, "M"], [36, "L"], [56, "XL"]].map(([s, l]) => (
               <Opt key={s} title={`${s}px`} value={s as number} current={Math.round(v("fontSize"))} onPick={(x) => set({ fontSize: x })}>{l}</Opt>
             ))}
           </Row>
-          <Row label="정렬">
+          {!onlyMath && <Row label="정렬">
             {(["left", "center", "right"] as const).map((a) => (
               <Opt key={a} title={{ left: "왼쪽", center: "가운데", right: "오른쪽" }[a]} value={a} current={v("textAlign")} onPick={(x) => set({ textAlign: x })}>
                 <svg width="18" height="18" viewBox="0 0 18 18"><path d={{ left: "M2 4h14M2 9h9M2 14h12", center: "M2 4h14M4.5 9h9M3 14h12", right: "M2 4h14M7 9h9M4 14h12" }[a]} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
               </Opt>
             ))}
-          </Row>
+          </Row>}
         </>
       )}
       <Row label={`투명도 ${v("opacity")}%`}>

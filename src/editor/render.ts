@@ -5,6 +5,7 @@ import { getStroke } from "perfect-freehand";
 import type { Arrowhead, El } from "../../shared/types";
 import { fontString, labelLines, LABEL_PAD, LINE_HEIGHT } from "./elements";
 import type { Pt } from "./geometry";
+import { mathFailed, mathImage, mathLayout } from "./math";
 
 const gen = rough.generator();
 
@@ -170,6 +171,41 @@ function drawTextBlock(
   for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], tx, y + i * lh + lh / 2);
 }
 
+function drawMath(ctx: CanvasRenderingContext2D, el: El, editing: boolean) {
+  const src = (el.text ?? "").trim();
+  if (!src) {
+    if (editing) {
+      ctx.strokeStyle = "#adb5bd";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(0, 0, el.w, el.h);
+      ctx.setLineDash([]);
+    }
+    return;
+  }
+  const layout = mathLayout(src);
+  const img = mathImage(src, el.strokeColor);
+  if (layout && img && img.complete && img.naturalWidth) {
+    // contain: the stored box may come from before MathJax finished loading elsewhere
+    const s = Math.min(el.w / layout.w, el.h / layout.h);
+    const w = layout.w * s, h = layout.h * s;
+    ctx.drawImage(img, (el.w - w) / 2, (el.h - h) / 2, w, h);
+    return;
+  }
+  // placeholder while the formula engine loads (or if it failed): show the source
+  const size = Math.max(8, Math.min(el.h * 0.6, 16));
+  ctx.font = fontString(size, "mono");
+  ctx.fillStyle = mathFailed() || layout?.error ? "#e03131" : "#868e96";
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, el.w, el.h);
+  ctx.clip();
+  ctx.fillText(src.replace(/\s+/g, " "), 0, el.h / 2);
+  ctx.restore();
+}
+
 export function drawElement(ctx: CanvasRenderingContext2D, rc: RoughCanvas, el: El, o: RenderOpts) {
   ctx.save();
   ctx.globalAlpha = (el.opacity ?? 100) / 100 * (o.faded ? 0.3 : 1);
@@ -236,7 +272,10 @@ export function drawElement(ctx: CanvasRenderingContext2D, rc: RoughCanvas, el: 
   }
 
   // text
-  if (o.editingId !== el.id) {
+  if (el.type === "text" && el.math) {
+    // formulas stay visible while editing – the source editor sits below as a live preview
+    drawMath(ctx, el, o.editingId === el.id);
+  } else if (o.editingId !== el.id) {
     if (el.type === "text" && el.text) {
       drawTextBlock(ctx, el.text.split("\n"), 0, 0, el.w, el);
     } else if ((el.type === "rectangle" || el.type === "ellipse" || el.type === "diamond" || el.type === "sticky") && el.text) {

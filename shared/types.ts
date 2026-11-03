@@ -52,6 +52,8 @@ export interface El {
   fontSize?: number;
   fontFamily?: FontFamily;
   textAlign?: TextAlign;
+  /** text element whose `text` is LaTeX source, rendered as a formula */
+  math?: boolean;
 
   // line / arrow / freedraw — points are relative to (x, y)
   points?: [number, number][];

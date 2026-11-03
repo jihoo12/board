@@ -64,6 +64,11 @@ export const Icons = {
       <path d="M5 6V4.5h14V6M12 4.5v15M9 19.5h6" />
     </I>
   ),
+  math: () => (
+    <I>
+      <path d="M18 5H6l6 7-6 7h12" />
+    </I>
+  ),
   sticky: () => (
     <I>
       <path d="M4 4h16v10l-6 6H4z" />

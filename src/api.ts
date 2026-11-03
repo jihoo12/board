@@ -20,6 +20,7 @@ export interface Providers {
   github: boolean;
   google: boolean;
   dev: boolean;
+  inviteOnly: boolean;
 }
 
 export const api = {
